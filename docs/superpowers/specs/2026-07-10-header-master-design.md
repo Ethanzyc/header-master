@@ -111,9 +111,15 @@ popup.js  ──写──▶  chrome.storage.local  ──onChanged──▶  ba
       { header: "Cookie",        operation: "remove" }
     ]
   },
-  condition: { urlFilter: "*" }      // 全局生效
+  condition: {
+    // 省略 urlFilter = 匹配所有 URL（官方文档：If omitted, all urls are matched）
+    // 必须显式列出 resourceTypes：省略时默认排除 main_frame，会导致主框架导航请求不生效
+    resourceTypes: ALL_RESOURCE_TYPES
+  }
 }
 ```
+
+`ALL_RESOURCE_TYPES` 定义在 `constants.js`，包含全部 `ResourceType` 枚举值：`main_frame, sub_frame, stylesheet, script, image, font, object, xmlhttprequest, ping, csp_report, media, websocket, webtransport, webbundle, other`。
 
 转换规则：
 
@@ -173,7 +179,7 @@ onChanged 触发
   "version": "0.1.0",
   "description": "全局修改 HTTP 请求头（覆盖 / 删除）",
   "permissions": ["declarativeNetRequest", "storage"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["*://*/*"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "action": { "default_popup": "src/popup.html" },
   "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
@@ -184,7 +190,7 @@ onChanged 触发
 
 - `declarativeNetRequest`：调用 DNR API 改写请求头。
 - `storage`：持久化规则。
-- `host_permissions: ["<all_urls>"]`：DNR 的 `modifyHeaders` 要求对匹配的 URL 拥有主机权限；全局生效需所有站点权限。
+- `host_permissions: ["*://*/*"]`：DNR 的 `modifyHeaders` 要求对匹配的 URL 拥有主机权限；`*://*/*` 覆盖全部 http/https 站点，足够且比 `<all_urls>` 更精确。
 
 ⚠️ 安装时 Chrome 会提示"可读取和更改您在所有网站上的数据"——这是全局请求头工具无法避免的，与 ModHeader 一致。
 
@@ -219,9 +225,13 @@ onChanged 触发
 6. 取消单条勾选，确认单条停用。
 7. 关闭重开浏览器，确认规则持久化。
 
-## 9. 关键技术假设（实现时需对照最新 DNR 文档确认）
+## 9. 已确认的 API 要点（对照官方 DNR 文档）
 
-- `urlFilter: "*"` 匹配所有 URL（实现时验证，必要时改 `regexFilter: ".*"`）。
-- 单条 DNR 规则的 `requestHeaders` 可包含多个操作（实现时验证无数量上限问题）。
+- `urlFilter` 省略时匹配所有 URL（文档原文：If omitted, all urls are matched）。本扩展省略 `urlFilter`。
+- `resourceTypes` **必须显式指定**：省略时默认排除 `main_frame`，会导致主框架导航请求不生效。本扩展列出全部 `ResourceType` 枚举值。
+- 单条 DNR 规则的 `requestHeaders` 是 `ModifyHeaderInfo[]` 数组，支持多操作合并，无小数量上限。
+- `operation` 三种：`set`（设值并移除同名旧值）、`remove`（删除该头全部实例）、`append`（仅限白名单头，本扩展不用）。`set`/`append` 需 `value`，`remove` 不需要。
+- `updateDynamicRules({ removeRuleIds, addRules })` 为原子操作，跨浏览器会话与扩展升级持久化。
 - `chrome.storage.onChanged` 会唤醒已休眠的 service worker（MV3 标准行为）。
-- 动态规则固定 `id: 1`，`removeRuleIds` + `addRules` 幂等替换。
+- 动态规则固定 `id: 1`，每次 `removeRuleIds:[1]` + `addRules:[...]` 幂等替换。
+- 动态规则上限：至少 5000 条（unsafe）/ 30000 条（safe），本扩展仅用 1 条，远低于上限。
