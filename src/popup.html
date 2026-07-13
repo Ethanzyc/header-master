@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Header Master</title>
+</head>
+<body>
+  <header class="topbar">
+    <span class="title">Header Master</span>
+    <label class="switch" title="总开关">
+      <input type="checkbox" id="master" />
+      <span class="slider"></span>
+    </label>
+  </header>
+
+  <div id="status" class="status">读取中…</div>
+
+  <ul id="rules" class="rules"></ul>
+
+  <button id="add" class="add" type="button">＋ 添加请求头</button>
+
+  <template id="row-template">
+    <li class="rule">
+      <input type="checkbox" class="rule-enabled" title="启用/停用此条" />
+      <input type="text" class="rule-header" placeholder="Header-Name" spellcheck="false" />
+      <select class="rule-op">
+        <option value="set">Set</option>
+        <option value="remove">Remove</option>
+      </select>
+      <input type="text" class="rule-value" placeholder="value" spellcheck="false" />
+      <button class="rule-delete" type="button" title="删除">✕</button>
+    </li>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
