@@ -107,31 +107,47 @@ body {
 }
 .add:hover { background: #f1f6fe; }
 
-.profile-bar {
+.tabs {
   display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 8px 10px 0;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
-.profile-select {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 6px;
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--fg);
-  font-size: 13px;
-}
-.profile-btn {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--fg);
+  border-radius: 6px 6px 0 0;
+  background: var(--row-bg);
+  color: var(--muted);
   cursor: pointer;
   font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
 }
-.profile-btn:hover { background: var(--row-bg); }
-.profile-btn:active { background: #e8eaed; }
+.tab:hover { background: #eef1f4; }
+.tab-active {
+  background: #fff;
+  color: var(--fg);
+  font-weight: 600;
+  border-top: 2px solid var(--accent);
+  padding-top: 4px;
+}
+.tab-name { padding: 1px 0; }
+.tab-close {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.tab-close:hover { background: var(--error); color: #fff; }
+.tab-add {
+  border-style: dashed;
+  color: var(--accent);
+  font-size: 16px;
+  padding: 5px 12px;
+}

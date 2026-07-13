@@ -8,10 +8,7 @@ const statusEl = $('#status');
 const ul = $('#rules');
 const addBtn = $('#add');
 const rowTpl = $('#row-template');
-const profileSel = $('#profile');
-const newBtn = $('#profile-new');
-const renameBtn = $('#profile-rename');
-const deleteBtn = $('#profile-delete');
+const tabsEl = $('#tabs');
 
 let state = { enabled: true, activeProfileId: 'p_default', profiles: [] };
 let saveTimer = null;
@@ -29,22 +26,105 @@ function activeProfile() {
 async function init() {
   state = await get();
   masterEl.checked = !!state.enabled;
-  renderProfiles();
+  renderTabs();
   renderRules();
   const data = await chrome.storage.local.get(ERROR_KEY);
   renderStatus(data[ERROR_KEY] || null);
 }
 
-function renderProfiles() {
-  profileSel.innerHTML = '';
+// ---- Profile 标签页 ----
+
+function renderTabs() {
+  tabsEl.innerHTML = '';
   for (const p of state.profiles) {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.name;
-    profileSel.appendChild(opt);
+    tabsEl.appendChild(buildTab(p));
   }
-  profileSel.value = state.activeProfileId;
+  // 末尾"+"新建
+  const addTab = document.createElement('div');
+  addTab.className = 'tab tab-add';
+  addTab.textContent = '＋';
+  addTab.title = '新建 Profile';
+  addTab.addEventListener('click', newProfile);
+  tabsEl.appendChild(addTab);
 }
+
+function buildTab(p) {
+  const tab = document.createElement('div');
+  tab.className = 'tab' + (p.id === state.activeProfileId ? ' tab-active' : '');
+  tab.dataset.id = p.id;
+  tab.title = '点击切换';
+  tab.addEventListener('click', () => switchProfile(p.id));
+
+  const name = document.createElement('span');
+  name.className = 'tab-name';
+  name.textContent = p.name;
+  name.title = '双击重命名';
+  name.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    renameProfile(p.id);
+  });
+  tab.appendChild(name);
+
+  if (state.profiles.length > 1) {
+    const close = document.createElement('span');
+    close.className = 'tab-close';
+    close.textContent = '✕';
+    close.title = '删除';
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteProfile(p.id);
+    });
+    tab.appendChild(close);
+  }
+  return tab;
+}
+
+function switchProfile(id) {
+  if (id === state.activeProfileId) return;
+  state.activeProfileId = id;
+  renderTabs();
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+}
+
+function newProfile() {
+  const name = (window.prompt('新建 Profile 名称：') || '').trim() || `Profile ${state.profiles.length + 1}`;
+  const p = { id: uid('p_'), name, rules: [] };
+  state.profiles.push(p);
+  state.activeProfileId = p.id;
+  renderTabs();
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+}
+
+function renameProfile(id) {
+  const p = state.profiles.find((x) => x.id === id);
+  if (!p) return;
+  const name = (window.prompt('重命名 Profile：', p.name) || '').trim();
+  if (!name) return;
+  p.name = name;
+  renderTabs();
+  scheduleSave();
+}
+
+function deleteProfile(id) {
+  if (state.profiles.length <= 1) {
+    window.alert('至少保留一个 Profile');
+    return;
+  }
+  state.profiles = state.profiles.filter((p) => p.id !== id);
+  if (state.activeProfileId === id) {
+    state.activeProfileId = state.profiles[0].id;
+  }
+  renderTabs();
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+}
+
+// ---- 规则行 ----
 
 function renderRules() {
   ul.innerHTML = '';
@@ -123,51 +203,6 @@ addBtn.addEventListener('click', () => {
   scheduleSave();
 });
 
-// ---- Profile 管理 ----
-
-profileSel.addEventListener('change', () => {
-  state.activeProfileId = profileSel.value;
-  renderRules();
-  renderStatus(null);
-  scheduleSave();
-});
-
-newBtn.addEventListener('click', () => {
-  const name = (window.prompt('新建 Profile 名称：') || '').trim() || `Profile ${state.profiles.length + 1}`;
-  const p = { id: uid('p_'), name, rules: [] };
-  state.profiles.push(p);
-  state.activeProfileId = p.id;
-  renderProfiles();
-  renderRules();
-  renderStatus(null);
-  scheduleSave();
-});
-
-renameBtn.addEventListener('click', () => {
-  const ap = activeProfile();
-  if (!ap) return;
-  const name = (window.prompt('重命名 Profile：', ap.name) || '').trim();
-  if (!name) return;
-  ap.name = name;
-  renderProfiles();
-  scheduleSave();
-});
-
-deleteBtn.addEventListener('click', () => {
-  if (state.profiles.length <= 1) {
-    window.alert('至少保留一个 Profile');
-    return;
-  }
-  const ap = activeProfile();
-  if (!ap) return;
-  state.profiles = state.profiles.filter((p) => p.id !== ap.id);
-  state.activeProfileId = state.profiles[0].id;
-  renderProfiles();
-  renderRules();
-  renderStatus(null);
-  scheduleSave();
-});
-
 // ---- 总开关 ----
 
 masterEl.addEventListener('change', () => {
@@ -177,7 +212,6 @@ masterEl.addEventListener('change', () => {
 });
 
 // debounce 300ms 写入 storage；background 监听变化自动同步 DNR。
-// 保存后回读 ERROR_KEY，把同步错误展示到状态行。
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
