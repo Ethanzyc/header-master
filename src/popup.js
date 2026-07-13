@@ -8,26 +8,48 @@ const statusEl = $('#status');
 const ul = $('#rules');
 const addBtn = $('#add');
 const rowTpl = $('#row-template');
+const profileSel = $('#profile');
+const newBtn = $('#profile-new');
+const renameBtn = $('#profile-rename');
+const deleteBtn = $('#profile-delete');
 
-let state = { enabled: true, rules: [] };
+let state = { enabled: true, activeProfileId: 'p_default', profiles: [] };
 let saveTimer = null;
 
 // 生成稳定唯一 id（popup 上下文可用 Date/random）
-function uid() {
-  return 'r_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function uid(prefix) {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// 当前生效的 profile（单活）
+function activeProfile() {
+  return state.profiles.find((p) => p.id === state.activeProfileId) || null;
 }
 
 async function init() {
   state = await get();
   masterEl.checked = !!state.enabled;
-  render();
+  renderProfiles();
+  renderRules();
   const data = await chrome.storage.local.get(ERROR_KEY);
   renderStatus(data[ERROR_KEY] || null);
 }
 
-function render() {
+function renderProfiles() {
+  profileSel.innerHTML = '';
+  for (const p of state.profiles) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    profileSel.appendChild(opt);
+  }
+  profileSel.value = state.activeProfileId;
+}
+
+function renderRules() {
   ul.innerHTML = '';
-  for (const rule of state.rules) {
+  const ap = activeProfile();
+  for (const rule of (ap ? ap.rules : [])) {
     ul.appendChild(buildRow(rule));
   }
 }
@@ -63,9 +85,10 @@ function toggleValue(opEl, valueEl) {
 }
 
 function onRowChange(e) {
+  const ap = activeProfile();
+  if (!ap) return;
   const li = e.target.closest('.rule');
-  const rid = li.dataset.id;
-  const rule = state.rules.find((r) => r.id === rid);
+  const rule = ap.rules.find((r) => r.id === li.dataset.id);
   if (!rule) return;
 
   const enabledEl = li.querySelector('.rule-enabled');
@@ -82,20 +105,70 @@ function onRowChange(e) {
 }
 
 function onDelete(e) {
-  const li = e.target.closest('.rule');
-  const rid = li.dataset.id;
-  state.rules = state.rules.filter((r) => r.id !== rid);
-  render();
+  const ap = activeProfile();
+  if (!ap) return;
+  const rid = e.target.closest('.rule').dataset.id;
+  ap.rules = ap.rules.filter((r) => r.id !== rid);
+  renderRules();
   scheduleSave();
 }
 
 addBtn.addEventListener('click', () => {
-  state.rules.push({ id: uid(), header: '', op: 'set', value: '', enabled: true });
-  render();
+  const ap = activeProfile();
+  if (!ap) return;
+  ap.rules.push({ id: uid('r_'), header: '', op: 'set', value: '', enabled: true });
+  renderRules();
   const last = ul.lastElementChild;
   if (last) last.querySelector('.rule-header').focus();
   scheduleSave();
 });
+
+// ---- Profile 管理 ----
+
+profileSel.addEventListener('change', () => {
+  state.activeProfileId = profileSel.value;
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+});
+
+newBtn.addEventListener('click', () => {
+  const name = (window.prompt('新建 Profile 名称：') || '').trim() || `Profile ${state.profiles.length + 1}`;
+  const p = { id: uid('p_'), name, rules: [] };
+  state.profiles.push(p);
+  state.activeProfileId = p.id;
+  renderProfiles();
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+});
+
+renameBtn.addEventListener('click', () => {
+  const ap = activeProfile();
+  if (!ap) return;
+  const name = (window.prompt('重命名 Profile：', ap.name) || '').trim();
+  if (!name) return;
+  ap.name = name;
+  renderProfiles();
+  scheduleSave();
+});
+
+deleteBtn.addEventListener('click', () => {
+  if (state.profiles.length <= 1) {
+    window.alert('至少保留一个 Profile');
+    return;
+  }
+  const ap = activeProfile();
+  if (!ap) return;
+  state.profiles = state.profiles.filter((p) => p.id !== ap.id);
+  state.activeProfileId = state.profiles[0].id;
+  renderProfiles();
+  renderRules();
+  renderStatus(null);
+  scheduleSave();
+});
+
+// ---- 总开关 ----
 
 masterEl.addEventListener('change', () => {
   state.enabled = masterEl.checked;
@@ -129,7 +202,8 @@ function renderStatus(error) {
     statusEl.textContent = '已暂停';
     return;
   }
-  const active = state.rules.filter((r) => r.enabled && r.header && r.header.trim()).length;
+  const ap = activeProfile();
+  const active = ap ? ap.rules.filter((r) => r.enabled && r.header && r.header.trim()).length : 0;
   statusEl.textContent = `${active} 条生效中`;
 }
 
