@@ -31,7 +31,11 @@ describe('constants', () => {
     expect(ALL_RESOURCE_TYPES.length).toBeGreaterThanOrEqual(10);
   });
 
-  it('DEFAULT_STATE 默认总开关开、规则为空', () => {
-    expect(DEFAULT_STATE).toEqual({ enabled: true, rules: [] });
+  it('DEFAULT_STATE 含默认 profile 且总开关开', () => {
+    expect(DEFAULT_STATE).toEqual({
+      enabled: true,
+      activeProfileId: 'p_default',
+      profiles: [{ id: 'p_default', name: '默认', rules: [] }],
+    });
   });
 });

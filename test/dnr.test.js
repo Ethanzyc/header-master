@@ -2,33 +2,32 @@ import { describe, it, expect } from 'vitest';
 import { stateToDnrRules } from '../src/lib/dnr.js';
 import { MASTER_RULE_ID, ALL_RESOURCE_TYPES } from '../src/lib/constants.js';
 
+function makeState({ enabled = true, activeId = 'p_default', profiles = [] } = {}) {
+  return { enabled, activeProfileId: activeId, profiles };
+}
+function profile(id, rules, name = id) {
+  return { id, name, rules };
+}
+function rule(header, op = 'set', value = '1', enabled = true) {
+  return { id: 'r_' + header, header, op, value, enabled };
+}
+
 describe('stateToDnrRules', () => {
-  it('总开关关时返回空数组', () => {
-    const state = {
-      enabled: false,
-      rules: [{ id: 'r1', header: 'X', op: 'set', value: '1', enabled: true }],
-    };
-    expect(stateToDnrRules(state)).toEqual([]);
+  it('总开关关 → []', () => {
+    expect(stateToDnrRules(makeState({ enabled: false, profiles: [profile('p', [rule('X')])] }))).toEqual([]);
   });
 
-  it('无任何规则启用时返回空数组', () => {
-    const state = {
-      enabled: true,
-      rules: [{ id: 'r1', header: 'X', op: 'set', value: '1', enabled: false }],
-    };
-    expect(stateToDnrRules(state)).toEqual([]);
+  it('无 active profile → []', () => {
+    expect(
+      stateToDnrRules(makeState({ activeId: 'p_missing', profiles: [profile('p', [rule('X')])] }))
+    ).toEqual([]);
   });
 
-  it('规则列表为空时返回空数组', () => {
-    expect(stateToDnrRules({ enabled: true, rules: [] })).toEqual([]);
-  });
-
-  it('单条 set 规则映射正确', () => {
-    const state = {
-      enabled: true,
-      rules: [{ id: 'r1', header: 'Authorization', op: 'set', value: 'Bearer x', enabled: true }],
-    };
-    expect(stateToDnrRules(state)).toEqual([
+  it('active profile 的 set 规则正确映射', () => {
+    const out = stateToDnrRules(
+      makeState({ profiles: [profile('p_default', [rule('Authorization', 'set', 'Bearer x')])] })
+    );
+    expect(out).toEqual([
       {
         id: MASTER_RULE_ID,
         priority: 1,
@@ -41,57 +40,51 @@ describe('stateToDnrRules', () => {
     ]);
   });
 
-  it('remove 规则不带 value 字段', () => {
-    const state = {
-      enabled: true,
-      rules: [{ id: 'r1', header: 'Cookie', op: 'remove', value: '应被忽略', enabled: true }],
-    };
-    const rules = stateToDnrRules(state);
-    expect(rules[0].action.requestHeaders).toEqual([
-      { header: 'Cookie', operation: 'remove' },
-    ]);
+  it('remove 规则不带 value', () => {
+    const out = stateToDnrRules(
+      makeState({ profiles: [profile('p_default', [rule('Cookie', 'remove', 'ignored')])] })
+    );
+    expect(out[0].action.requestHeaders).toEqual([{ header: 'Cookie', operation: 'remove' }]);
   });
 
-  it('多条生效规则合并进同一条 DNR 规则', () => {
-    const state = {
-      enabled: true,
-      rules: [
-        { id: 'r1', header: 'A', op: 'set', value: '1', enabled: true },
-        { id: 'r2', header: 'B', op: 'remove', value: '', enabled: true },
-        { id: 'r3', header: 'C', op: 'set', value: '2', enabled: false },
-      ],
-    };
-    const rules = stateToDnrRules(state);
-    expect(rules).toHaveLength(1);
-    expect(rules[0].action.requestHeaders).toHaveLength(2);
-    expect(rules[0].action.requestHeaders).toEqual([
+  it('非 active profile 的规则不生效（关键用例）', () => {
+    const out = stateToDnrRules(
+      makeState({
+        activeId: 'p_active',
+        profiles: [
+          profile('p_active', [rule('A', 'set', '1')]),
+          profile('p_other', [rule('B', 'set', '2')]),
+        ],
+      })
+    );
+    expect(out[0].action.requestHeaders).toEqual([{ header: 'A', operation: 'set', value: '1' }]);
+  });
+
+  it('多条生效规则合并进一条', () => {
+    const out = stateToDnrRules(
+      makeState({
+        profiles: [
+          profile('p_default', [rule('A', 'set', '1'), rule('B', 'remove'), rule('C', 'set', '3', false)]),
+        ],
+      })
+    );
+    expect(out[0].action.requestHeaders).toEqual([
       { header: 'A', operation: 'set', value: '1' },
       { header: 'B', operation: 'remove' },
     ]);
   });
 
   it('跳过头名称为空的规则', () => {
-    const state = {
-      enabled: true,
-      rules: [
-        { id: 'r1', header: '   ', op: 'set', value: '1', enabled: true },
-        { id: 'r2', header: 'X', op: 'set', value: '2', enabled: true },
-      ],
-    };
-    const rules = stateToDnrRules(state);
-    expect(rules[0].action.requestHeaders).toEqual([
-      { header: 'X', operation: 'set', value: '2' },
-    ]);
+    const out = stateToDnrRules(
+      makeState({ profiles: [profile('p_default', [rule('   ', 'set', '1'), rule('X', 'set', '2')])] })
+    );
+    expect(out[0].action.requestHeaders).toEqual([{ header: 'X', operation: 'set', value: '2' }]);
   });
 
-  it('set 规则缺省 value 时补空字符串', () => {
-    const state = {
-      enabled: true,
-      rules: [{ id: 'r1', header: 'X', op: 'set', enabled: true }],
-    };
-    const rules = stateToDnrRules(state);
-    expect(rules[0].action.requestHeaders).toEqual([
-      { header: 'X', operation: 'set', value: '' },
-    ]);
+  it('active profile 无生效规则 → []', () => {
+    expect(
+      stateToDnrRules(makeState({ profiles: [profile('p_default', [rule('X', 'set', '1', false)])] }))
+    ).toEqual([]);
+    expect(stateToDnrRules(makeState({ profiles: [profile('p_default', [])] }))).toEqual([]);
   });
 });

@@ -25,5 +25,9 @@ export const ALL_RESOURCE_TYPES = [
   'other',
 ];
 
-// 首次使用 / storage 为空时的默认状态
-export const DEFAULT_STATE = { enabled: true, rules: [] };
+// 首次使用 / storage 为空时的默认状态：单个"默认"profile，总开关开
+export const DEFAULT_STATE = {
+  enabled: true,
+  activeProfileId: 'p_default',
+  profiles: [{ id: 'p_default', name: '默认', rules: [] }],
+};
