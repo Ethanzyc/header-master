@@ -106,3 +106,32 @@ body {
   font-size: 13px;
 }
 .add:hover { background: #f1f6fe; }
+
+.profile-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--fg);
+  font-size: 13px;
+}
+.profile-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 12px;
+}
+.profile-btn:hover { background: var(--row-bg); }
+.profile-btn:active { background: #e8eaed; }
